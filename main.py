@@ -243,7 +243,7 @@ def create_destination_file(source_file):
             "Tranche Upload ID", "Tranche Benchmark", "Basis Point From", "Basis Point To", "Period From", "Period To", "Period Duration", "Comment"])
         tranche_pricings_df.to_excel(writer, sheet_name='Tranche_Pricings', index=False)
         tranche_roles_any_df = pd.DataFrame(columns=[
-                    "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type",	"Company",	"Fund",	"Value", "Percentage", "Comment"])
+                    "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type",	"Company",	"Fund",	"Value", "Percentage", "Comment", "Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m" ])
         tranche_roles_any_df.to_excel(writer, sheet_name='Tranche_Roles_Any', index=False)        
 
         # Autofit columns for all sheets
