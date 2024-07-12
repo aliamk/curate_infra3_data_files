@@ -192,6 +192,60 @@ def populate_additional_tranches(transaction_df, tranches_df):
     
     return tranches_df
 
+def populate_tranche_roles_any(transaction_df):
+    entries = []
+
+    # Process 'Tranche 1 Lenders' to 'Tranche 20 Lenders' first
+    for i in range(1, 21):
+        lenders_column = f'Tranche {i} Lenders'
+
+        if lenders_column in transaction_df.columns:
+            for _, row in transaction_df.iterrows():
+                if pd.notna(row[lenders_column]):
+                    lenders = row[lenders_column].split(',')
+                    for lender in lenders:
+                        lender = lender.strip()
+                        if lender:
+                            entries.append({
+                                "Transaction Upload ID": row["Transaction Upload ID"],
+                                "Tranche Upload ID": f'{row["Transaction Upload ID"]}-L{i}',
+                                "Company": lender
+                            })
+
+    # Process 'Capital Market Debt 1 Underwriters' to 'Capital Market Debt 20 Underwriters' next
+    for i in range(1, 21):
+        cm1_column = f'Capital Market Debt {i} Underwriters'
+        cm2_column = f'Capital Market Debt 2{i} Underwriters'
+
+        if cm1_column in transaction_df.columns:
+            for _, row in transaction_df.iterrows():
+                if pd.notna(row[cm1_column]):
+                    underwriters_cm1 = row[cm1_column].split(',')
+                    for underwriter in underwriters_cm1:
+                        underwriter = underwriter.strip()
+                        if underwriter:
+                            entries.append({
+                                "Transaction Upload ID": row["Transaction Upload ID"],
+                                "Tranche Upload ID": f'{row["Transaction Upload ID"]}-CM{i}',
+                                "Company": underwriter
+                            })
+
+        if cm2_column in transaction_df.columns:
+            for _, row in transaction_df.iterrows():
+                if pd.notna(row[cm2_column]):
+                    underwriters_cm2 = row[cm2_column].split(',')
+                    for underwriter in underwriters_cm2:
+                        underwriter = underwriter.strip()
+                        if underwriter:
+                            entries.append({
+                                "Transaction Upload ID": row["Transaction Upload ID"],
+                                "Tranche Upload ID": f'{row["Transaction Upload ID"]}-CM2{i}',
+                                "Company": underwriter
+                            })
+
+    return pd.DataFrame(entries, columns=[
+        "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type", "Company", "Fund", "Value", "Percentage", "Comment",	"Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+
 # Autofit columns
 def autofit_columns(writer):
     for sheetname in writer.sheets:
@@ -231,6 +285,9 @@ def create_destination_file(source_file):
     # Create destination file name
     destination_file_name = f'curated_INFRA3_{formatted_time}.xlsx'
     
+    # Populate tranche roles
+    tranche_roles_any_df = populate_tranche_roles_any(transaction_df)
+    
     # Save to new Excel file
     with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
         transaction_mapped_df.to_excel(writer, sheet_name='Transaction', index=False)
@@ -242,8 +299,6 @@ def create_destination_file(source_file):
         tranche_pricings_df = pd.DataFrame(columns=[
             "Tranche Upload ID", "Tranche Benchmark", "Basis Point From", "Basis Point To", "Period From", "Period To", "Period Duration", "Comment"])
         tranche_pricings_df.to_excel(writer, sheet_name='Tranche_Pricings', index=False)
-        tranche_roles_any_df = pd.DataFrame(columns=[
-                    "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type",	"Company",	"Fund",	"Value", "Percentage", "Comment", "Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m" ])
         tranche_roles_any_df.to_excel(writer, sheet_name='Tranche_Roles_Any', index=False)        
 
         # Autofit columns for all sheets
