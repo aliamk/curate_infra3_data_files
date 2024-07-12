@@ -2,9 +2,17 @@ import streamlit as st
 import pandas as pd
 import tempfile
 import os
-import openpyxl
+import re
+from openpyxl.utils import get_column_letter
+import pytz
+from datetime import datetime
 
 def process_transaction_sheet(transaction_df):
+    # Define a function to extract numerical value from a string
+    def extract_numerical_value(text):
+        match = re.search(r'[\d,.]+', str(text))
+        return match.group() if match else ''
+
     # Map columns for the 'Transaction' sheet with transformations
     return pd.DataFrame({
         "Transaction Upload ID": transaction_df["Transaction Upload ID"],
@@ -15,7 +23,7 @@ def process_transaction_sheet(transaction_df):
         "Transaction Type": transaction_df.get("Type", ""),
         "Unknown Asset": "",
         "Underlying Asset Configuration": "",
-        "Transaction Local Currency": transaction_df.get("Transaction Currency", ""),
+        "Transaction Local Currency": transaction_df["Transaction Currency"].apply(extract_numerical_value),  # Extract numerical value
         "Transaction Value (Local Currency)": transaction_df.get("Transaction size (m)", ""),
         "Transaction Debt (Local Currency)": "",
         "Transaction Equity (Local Currency)": "",
@@ -71,8 +79,6 @@ def process_events_sheet(transaction_df):
 
     return events_df
 
-
-
 def process_bidders_any_sheet(transaction_df):
     sources = {
         "Legal Advisors": "Adviser",
@@ -110,8 +116,97 @@ def process_bidders_any_sheet(transaction_df):
         "Transaction Upload ID", "Role Type", "Role Subtype", "Company", "Fund", 
         "Bidder Status", "Client Counterparty", "Client Company Name", "Fund Name"])
 
+def process_tranches_sheet(transaction_df):
+    # Prepare a list to store all entries before converting to DataFrame
+    entries = []
 
+    # Process tranches up to a maximum of 20
+    for i in range(1, 21):
+        tranche_type_column = f'Loan Debt Tranche {i} Type'
+        tranche_tenor_column = f'Tranche {i} Tenor'
+        tranche_value_column = f'Tranche {i} Volume USD (m)'
+        
+        # Check if the tranche columns exist in the dataframe
+        if all(column in transaction_df.columns for column in [tranche_type_column, tranche_tenor_column, tranche_value_column]):
+            for _, row in transaction_df.iterrows():
+                if pd.notna(row[tranche_type_column]) or pd.notna(row[tranche_tenor_column]) or pd.notna(row[tranche_value_column]):
+                    # Append data to entries
+                    entries.append({
+                        "Transaction Upload ID": row["Transaction Upload ID"],
+                        "Tranche Upload ID": f'{row["Transaction Upload ID"]}-L{i}',
+                        "Tranche Primary Type": "",  
+                        "Tranche Secondary Type": "",  
+                        "Tranche Tertiary Type": row.get(tranche_type_column, ""),
+                        "Value": "",  
+                        "Maturity Start Date": "",  
+                        "Maturity End Date": "",  
+                        "Tenor": row.get(tranche_tenor_column, ""),
+                        "Tranche ESG Type": "",  
+                        "Helper_Tranche Value USD m": row.get(tranche_value_column, "")
+                    })
 
+    # Create DataFrame from list of dictionaries
+    tranches_df = pd.DataFrame(entries, columns=[
+        "Transaction Upload ID", "Tranche Upload ID", "Tranche Primary Type", 
+        "Tranche Secondary Type", "Tranche Tertiary Type", "Value", 
+        "Maturity Start Date", "Maturity End Date", "Tenor", 
+        "Tranche ESG Type", "Helper_Tranche Value USD m"])
+    
+    # Remove rows where 'Tranche Tertiary Type' is empty or invalid
+    tranches_df = tranches_df[tranches_df["Tranche Tertiary Type"].astype(str).str.strip() != ""]
+
+    return tranches_df
+
+def populate_additional_tranches(transaction_df, tranches_df):
+    # Process capital market tranches up to a maximum of 20
+    for i in range(1, 21):
+        cap_market_debt_column = f'Capital Market Debt {i} Volume USD (m)'
+        
+        if cap_market_debt_column in transaction_df.columns:
+            for _, row in transaction_df.iterrows():
+                if pd.notna(row[cap_market_debt_column]):
+                    volume_usd = row[cap_market_debt_column]
+                    transaction_upload_id = row["Transaction Upload ID"]
+                    tranche_upload_id = f'{transaction_upload_id}-CM{i}'
+                    
+                    # Create a temporary DataFrame for the new tranche
+                    temp_df = pd.DataFrame({
+                        "Transaction Upload ID": [transaction_upload_id],
+                        "Tranche Upload ID": [tranche_upload_id],
+                        "Tranche Primary Type": [""],  
+                        "Tranche Secondary Type": [""],  
+                        "Tranche Tertiary Type": [""],  
+                        "Value": [""],  
+                        "Maturity Start Date": [""],  
+                        "Maturity End Date": [""],  
+                        "Tenor": [""],  
+                        "Tranche ESG Type": [""],  
+                        "Helper_Tranche Value USD m": [volume_usd]
+                    })
+                    
+                    # Append the temporary DataFrame to the main tranches DataFrame
+                    tranches_df = pd.concat([tranches_df, temp_df], ignore_index=True)
+
+    # Remove rows where 'Helper_Tranche Value USD m' (Column K) is empty
+    tranches_df = tranches_df[tranches_df["Helper_Tranche Value USD m"].astype(str).str.strip() != ""]
+    
+    return tranches_df
+
+# Autofit columns
+def autofit_columns(writer):
+    for sheetname in writer.sheets:
+        worksheet = writer.sheets[sheetname]
+        for col in worksheet.columns:
+            max_length = 0
+            column = get_column_letter(col[0].column)  # Get the column name
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet.column_dimensions[column].width = adjusted_width
 
 def create_destination_file(source_file):
     # Load the source Excel file and automatically select the first sheet
@@ -123,14 +218,38 @@ def create_destination_file(source_file):
     transaction_mapped_df = process_transaction_sheet(transaction_df)
     events_df = process_events_sheet(transaction_df)
     bidders_any_df = process_bidders_any_sheet(transaction_df)  # Process the 'Bidders_Any' sheet
+    tranches_df = process_tranches_sheet(transaction_df)  # Process the 'Tranches' sheet
+    
+    # Populate additional tranches
+    tranches_df = populate_additional_tranches(transaction_df, tranches_df)
+    
+    # Get the current date and time in London timezone
+    london_tz = pytz.timezone('Europe/London')
+    current_time = datetime.now(london_tz)
+    formatted_time = current_time.strftime('%Y%m%d_%H%M')
+    
+    # Create destination file name
+    destination_file_name = f'curated_INFRA3_{formatted_time}.xlsx'
     
     # Save to new Excel file
-    with pd.ExcelWriter('processed_file.xlsx', engine='openpyxl') as writer:
+    with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
         transaction_mapped_df.to_excel(writer, sheet_name='Transaction', index=False)
+        underlying_asset_df = pd.DataFrame(columns=["Transaction Upload ID", "Asset Upload ID"])
+        underlying_asset_df.to_excel(writer, sheet_name='Underlying_Asset', index=False)
         events_df.to_excel(writer, sheet_name='Events', index=False)
         bidders_any_df.to_excel(writer, sheet_name='Bidders_Any', index=False)
+        tranches_df.to_excel(writer, sheet_name='Tranches', index=False)
+        tranche_pricings_df = pd.DataFrame(columns=[
+            "Tranche Upload ID", "Tranche Benchmark", "Basis Point From", "Basis Point To", "Period From", "Period To", "Period Duration", "Comment"])
+        tranche_pricings_df.to_excel(writer, sheet_name='Tranche_Pricings', index=False)
+        tranche_roles_any_df = pd.DataFrame(columns=[
+                    "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type",	"Company",	"Fund",	"Value", "Percentage", "Comment"])
+        tranche_roles_any_df.to_excel(writer, sheet_name='Tranche_Roles_Any', index=False)        
+
+        # Autofit columns for all sheets
+        autofit_columns(writer)
     
-    return 'processed_file.xlsx'
+    return destination_file_name
 
 
 # Streamlit app
@@ -163,8 +282,11 @@ if uploaded_file is not None:
 
     finally:
         # Clean up temporary files
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+        try:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+        except PermissionError:
+            st.warning("Temporary file could not be deleted immediately, please try again later.")
         if os.path.exists(destination_path):
             os.remove(destination_path)
 
