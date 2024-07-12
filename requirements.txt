@@ -1,0 +1,6 @@
+pandas
+openpyxl
+xlsxwriter
+streamlit
+pytz
+numpy
