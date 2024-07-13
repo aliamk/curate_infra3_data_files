@@ -32,12 +32,13 @@ def process_transaction_sheet(transaction_df):
         "Region - Country": transaction_df.get("Geography", ""),
         "Region - State": "",
         "Region - City": "",
-        "Any Level Sectors": transaction_df.get("Sector", "") + ", " + transaction_df.get("Sub-Sector", ""),
+        "Any Level Sectors": "",
         "PPP": transaction_df.get("PPP", ""),
         "Concession Period": transaction_df.get("Duration", ""),
         "Contract": transaction_df.get("Delivery Model", ""),
         "SPV": transaction_df.get("SPV", ""),
-        "Active": "TRUE"
+        "Active": "TRUE",
+        "Helper_Any Level Sectors": transaction_df.get("Sector", "") + ", " + transaction_df.get("Sub-Sector", "")
     })
 
 def process_events_sheet(transaction_df):
