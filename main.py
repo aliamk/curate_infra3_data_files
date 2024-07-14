@@ -336,7 +336,7 @@ def process_transaction_sheet(transaction_df):
     return pd.DataFrame({
         "Transaction Upload ID": transaction_df["Transaction Upload ID"],
         "Transaction Name": transaction_df["Transaction Name"],
-        "Asset Class": "Infrastructure",  # Static value for all rows
+        "Transaction Asset Class": "Infrastructure",  # Static value for all rows
         "Transaction Status": transaction_df.get("Current status", "").apply(replace_transaction_status),  # Using .get to avoid KeyError if not present
         "Finance Type": transaction_df.get("Finance Type", ""),
         "Transaction Type": transaction_df.get("Type", "").apply(replace_transaction_type),
@@ -445,14 +445,34 @@ def process_bidders_any_sheet(transaction_df):
                 for company in companies:
                     company = company.strip()
                     if company:  # Ensure company is not empty
+                        # Determine Client Counterparty based on the content in parentheses
+                        client_counterparty = ''
+                        if '(Funders)' in company:
+                            client_counterparty = 'Debt Provider'
+                        elif '(Acquirer)' in company or '(Acquiror)' in company:
+                            client_counterparty = 'Acquirer'
+                        elif '(SPV)' in company:
+                            client_counterparty = 'SPV'
+                        elif '(Seller)' in company:
+                            client_counterparty = 'Divestor'
+                        elif '(Grantor)' in company:
+                            client_counterparty = 'Awarding Authority'
+                        elif '(Target)' in company or '(Target Company)' in company:
+                            client_counterparty = 'Target'
+                        elif '(Lenders)' in company:
+                            client_counterparty = 'Debt Provider'
+
+                        # Remove parentheses and their content from the company name
+                        company_cleaned = re.sub(r'\s*\(.*?\)\s*', '', company).strip()
+
                         entries.append({
                             "Transaction Upload ID": row["Transaction Upload ID"],
                             "Role Type": role_type,
                             "Role Subtype": "",
-                            "Company": company,
+                            "Company": company_cleaned,
                             "Fund": "",
-                            "Bidder Status": "",
-                            "Client Counterparty": "",
+                            "Bidder Status": "Successful",
+                            "Client Counterparty": client_counterparty,
                             "Client Company Name": "",
                             "Fund Name": ""
                         })
@@ -461,6 +481,7 @@ def process_bidders_any_sheet(transaction_df):
     return pd.DataFrame(entries, columns=[
         "Transaction Upload ID", "Role Type", "Role Subtype", "Company", "Fund", 
         "Bidder Status", "Client Counterparty", "Client Company Name", "Fund Name"])
+
 
 def process_tranches_sheet(transaction_df):
     # Prepare a list to store all entries before converting to DataFrame
