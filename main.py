@@ -13,14 +13,333 @@ def process_transaction_sheet(transaction_df):
         match = re.search(r'[\d,.]+', str(text))
         return match.group() if match else ''
 
+    # Define a function to replace specific words in the 'Transaction Status' column
+    def replace_transaction_status(status):
+        replacements = {
+            'Binding Bids': 'Preparation',
+            'Expressions of Interest': 'Preparation',
+            'Indicative Bids': 'Preparation',
+            'No Private Financing': '',
+            'On Hold': 'Preparation',
+            'Preferred Proponent': 'Financing',
+            'Pre-Launch': 'Preparation',
+            'Pre-Qualified Proponents': 'Preparation',
+            'RFP Returned': 'Preparation',
+            'RFQ returned': 'Preparation',
+            'Shortlisted Proponents': 'Preparation',
+            'Transaction Launch': 'Preparation'
+        }
+        return replacements.get(status, status)
+    
+    # Define a function to replace specific words in the 'Transaction Type' column
+    def replace_transaction_type(type):
+        replacements = {
+            'Additional Financing': 'Additional Financing',
+            'Greenfield': 'Primary Financing',
+            'M&A': 'Acquisition',
+            'Nationalisation': '',
+            'Privatisation': 'Privatisation',
+            'Privatisation,M&A': 'Privatisation',
+            'Public Offering': '',
+            'Refinancing': 'Refinancing',
+            'Take Private': ''
+        }
+        return replacements.get(type, type)
+    
+    # Define a function to replace specific words in the 'region - country' column
+    def replace_region_country(region):
+        replacements = {
+            'AFGHANISTAN': 'Afghanistan',
+            'ALBANIA': 'Albania',
+            'ALGERIA': 'Algeria',
+            'ANDORRA': 'Andorra',
+            'ANGOLA': 'Angola',
+            'ARGENTINA': 'Argentina',
+            'ARMENIA': 'Armenia',
+            'ARUBA': 'Aruba',
+            'AUSTRALIA': 'Australia',
+            'AUSTRIA': 'Austria',
+            'AZERBAIJAN': 'Azerbaijan',
+            'BAHAMAS': 'Bahamas',
+            'BAHRAIN': 'Bahrain',
+            'BANGLADESH': 'Bangladesh',
+            'BARBADOS': 'Barbados',
+            'BELARUS': 'Belarus',
+            'BELGIUM': 'Belgium',
+            'BENIN': 'Benin',
+            'BERMUDA': 'Bermuda',
+            'BOLIVIA': 'Bolivia',
+            'BOSNIA': 'Bosnia & Herzegovina',
+            'BOTSWANA': 'Botswana',
+            'BRAZIL': 'Brazil',
+            'BRUNEI': 'Brunei',
+            'BULGARIA': 'Bulgaria',
+            'BURKINA FASO': 'Burkina Faso',
+            'BURUNDI': 'Burundi',
+            'CAMBODIA': 'Cambodia',
+            'CAMEROON': 'Cameroon',
+            'CANADA': 'Canada',
+            'CAPE VERDE': 'Cape Verde',
+            'CAYMAN ISLANDS': 'Cayman Islands',
+            'CHAD': 'Chad',
+            'CHILE': 'Chile',
+            'CHINA': 'China',
+            'COLOMBIA': 'Colombia',
+            'CONGO - REPUBLIC OF THE': 'Republic of the Congo',
+            'COSTA RICA': 'Costa Rica',
+            'CROATIA': 'Croatia',
+            'CURACAO': 'Curaçao',
+            'CYPRUS': 'Cyprus',
+            'CZECH REPUBLIC': 'Czech Republic',
+            'DENMARK': 'Denmark',
+            'DJIBOUTI': 'Djibouti',
+            'DOMINICAN REPUBLIC': 'Dominican Republic',
+            'DR CONGO': 'Democratic Republic of Congo',
+            'EAST TIMOR': 'Timor-Leste',
+            'ECUADOR': 'Ecuador',
+            'EGYPT': 'Egypt',
+            'EL SALVADOR': 'El Salvador',
+            'ESTONIA': 'Estonia',
+            'ETHIOPIA': 'Ethiopia',
+            'FINLAND': 'Finland',
+            'FRANCE': 'France',
+            'FRENCH GUIANA': 'French Guiana',
+            'FRENCH POLYNESIA': 'French Polynesia',
+            'GABON': 'Gabon',
+            'GAMBIA': 'Gambia',
+            'GEORGIA': 'Georgia',
+            'GERMANY': 'Germany',
+            'GHANA': 'Ghana',
+            'GIBRALTAR': 'Gibraltar',
+            'GREECE': 'Greece',
+            'GUATEMALA': 'Guatemala',
+            'GUINEA': 'Guinea',
+            'GUYANA': 'Guyana',
+            'HONDURAS': 'Honduras',
+            'HONG KONG (CHINA)': 'Hong Kong',
+            'HUNGARY': 'Hungary',
+            'ICELAND': 'Iceland',
+            'INDIA': 'India',
+            'INDONESIA': 'Indonesia',
+            'IRAQ': 'Iraq',
+            'IRELAND': 'Ireland',
+            'ISRAEL': 'Israel',
+            'ITALY': 'Italy',
+            'IVORY COAST': 'Ivory Coast',
+            'JAMAICA': 'Jamaica',
+            'JAPAN': 'Japan',
+            'JORDAN': 'Jordan',
+            'KAZAKHSTAN': 'Kazakhstan',
+            'KENYA': 'Kenya',
+            'KOSOVO': 'Kosovo',
+            'KUWAIT': 'Kuwait',
+            'KYRGYZSTAN': 'Kyrgyzstan',
+            'LAOS': 'Laos',
+            'LATVIA': 'Latvia',
+            'LIBERIA': 'Liberia',
+            'LIBYA': 'Libya',
+            'LITHUANIA': 'Lithuania',
+            'LUXEMBOURG': 'Luxembourg',
+            'MADAGASCAR': 'Madagascar',
+            'MALAWI': 'Malawi',
+            'MALAYSIA': 'Malaysia',
+            'MALDIVES': 'Maldives',
+            'MALI': 'Mali',
+            'MAURITIUS': 'Mauritius',
+            'MEXICO': 'Mexico',
+            'MOLDOVA': 'Moldova',
+            'MONACO': 'Monaco',
+            'MONGOLIA': 'Mongolia',
+            'MONTENEGRO': 'Montenegro',
+            'MONTSERRAT': 'Montserrat',
+            'MOROCCO': 'Morocco',
+            'MOZAMBIQUE': 'Mozambique',
+            'MYANMAR': 'Myanmar',
+            'NAMIBIA': 'Namibia',
+            'NEPAL': 'Nepal',
+            'NETHERLANDS': 'Netherlands',
+            'NETHERLANDS ANTILLES': '',
+            'NEW ZEALAND': 'New Zealand',
+            'NICARAGUA': 'Nicaragua',
+            'NIGER': 'Niger',
+            'NIGERIA': 'Nigeria',
+            'NORTH MACEDONIA': 'North Macedonia',
+            'NORWAY': 'Norway',
+            'OMAN': 'Oman',
+            'PAKISTAN': 'Pakistan',
+            'PALESTINE': 'Palestine',
+            'PANAMA': 'Panama',
+            'PAPUA NEW GUINEA': 'Papua New Guinea',
+            'PARAGUAY': 'Paraguay',
+            'PERU': 'Peru',
+            'PHILIPPINES': 'Philippines',
+            'POLAND': 'Poland',
+            'PORTUGAL': 'Portugal',
+            'QATAR': 'Qatar',
+            'REUNION': 'Reunion',
+            'ROMANIA': 'Romania',
+            'RUSSIA': 'Russia',
+            'RWANDA': 'Rwanda',
+            'SAUDI ARABIA': 'Saudi Arabia',
+            'SENEGAL': 'Senegal',
+            'SERBIA': 'Serbia',
+            'SEYCHELLES': 'Seychelles',
+            'SINGAPORE': 'Singapore',
+            'SLOVAKIA': 'Slovakia',
+            'SLOVENIA': 'Slovenia',
+            'SOUTH AFRICA': 'South Africa',
+            'SOUTH KOREA': 'South Korea',
+            'SPAIN': 'Spain',
+            'SRI LANKA': 'Sri Lanka',
+            'SWEDEN': 'Sweden',
+            'SWITZERLAND': 'Switzerland',
+            'SYRIA': 'Syria',
+            'TAIWAN (CHINA)': 'Taiwan',
+            'TAJIKISTAN': 'Tajikistan',
+            'TANZANIA': 'Tanzania',
+            'THAILAND': 'Thailand',
+            'TOGO': 'Togo',
+            'TRINIDAD & TOBAGO': 'Trinidad and Tobago',
+            'TUNISIA': 'Tunisia',
+            'TURKEY': 'Turkey',
+            'UGANDA': 'Uganda',
+            'UKRAINE': 'Ukraine',
+            'UNITED ARAB EMIRATES': 'United Arab Emirates',
+            'UNITED KINGDOM': 'United Kingdom',
+            'URUGUAY': 'Uruguay',
+            'USA': 'United States',
+            'UZBEKISTAN': 'Uzbekistan',
+            'VIETNAM': 'Vietnam',
+            'VIRGIN ISLANDS (US)': 'US Virgin Islands',
+            'ZAMBIA': 'Zambia',
+            'ZIMBABWE': 'Zimbabwe'
+        }
+        return replacements.get(region, region)
+    
+    # Define a function to replace specific words in the 'contract' column
+    def replace_contract(contract):
+        replacements = {
+            'DBFOM': 'DBFOM',
+            'DBFM': 'DBFM',
+            'DBFO': 'DBFO',
+            'DBF': 'DBF',
+            'BF': '',
+            'BFOM': '',
+            'DBOM': '',
+            'BFO': '',
+            'BO': '',
+            'OM': '',
+            'DBO': '',
+            'DB': '',
+            'FOM': '',
+            'BOM': '',
+            'DFOM': '',
+            'DBM': '',
+            'BM': '',
+            'DOM': '',
+            'DO': '',
+            'DFO': '',
+            'O': '',
+        }
+        return replacements.get(contract, contract)
+
+    # Define a function to replace words based on the replacement list for 'Any Level Sectors'
+    def populate_any_level_sectors(sectors):
+        replacements = {
+            'Accommodation': 'Social Infrastructure',
+            'Airports': 'Transport, Airport',
+            'Battery Storage': 'Renewable Energy, Energy Storage',
+            'Biofuels': 'Renewable Energy, Biofuels/Biomass',
+            'Biogas': 'Renewable Energy, Biofuels/Biomass',
+            'Biomass': 'Renewable Energy, Biofuels/Biomass',
+            'Bridges and Tunnels': 'Transport',
+            'Broadband': 'Digital Infrastructure, Internet',
+            'Car Parks': 'Transport, Car Park',
+            'Carbon Capture': 'Renewable Energy, Carbon Capture & Storage',
+            'Coal fired': 'Conventional Energy, Coal-Fired Power',
+            'Co-generation': 'Conventional Energy, Cogeneration Power',
+            'Courthouses': 'Social Infrastructure, Justice',
+            'Data Centre': 'Digital Infrastructure, Data Centre',
+            'Defence': 'Social Infrastructure',
+            'Desalination': 'Water, Desalination',
+            'District Heating & Cooling': 'Social Infrastructure, Heat Network',
+            'Education': 'Social Infrastructure, Education',
+            'Electricity Distribution': 'Conventional Energy, Transmission',
+            'Electricity Smart Meter': 'Conventional Energy, Transmission',
+            'Electricity Transmission': 'Conventional Energy, Transmission',
+            'Energy from waste': 'Renewable Energy, Waste to Energy',
+            'Energy Other': 'Conventional Energy',
+            'EV Infrastructure': 'Renewable Energy, EV Charging',
+            'Exploration & Production': 'Oil & Gas, Upstream',
+            'Ferries': 'Transport, Waterway',
+            'Fibre Optic': 'Digital Infrastructure, Internet',
+            'Floating Solar PV': 'Renewable Energy, Solar (Floating PV)',
+            'Gas Distribution': 'Oil & Gas, Downstream',
+            'Gas fired': 'Conventional Energy, Gas-Fired Power',
+            'Gas Pipeline': 'Oil & Gas, Midstream',
+            'Gas Smart Meter': 'Conventional Energy',
+            'Geothermal': 'Renewable Energy, Geothermal',
+            'Healthcare': 'Social Infrastructure, Healthcare',
+            'High-speed Rail': 'Transport, Heavy Rail',
+            'Hydroelectric': 'Renewable Energy, Hydro',
+            'Hydrogen': 'Renewable Energy, Hydrogen',
+            'IWPP': 'Conventional Energy',
+            'Leisure': 'Social Infrastructure, Leisure',
+            'LNG export terminal': 'Oil & Gas, LNG',
+            'Microgrids': 'Conventional Energy, Transmission',
+            'Mining': 'Mining',
+            'Nuclear': 'Conventional Energy, Nuclear Power',
+            'Offshore wind': 'Renewable Energy, Wind (Offshore)',
+            'Oil & Gas Storage': 'Oil & Gas, Midstream',
+            'Oil & gas transportation': 'Oil & Gas, Midstream',
+            'Oil fired': 'Conventional Energy, Oil-Fired Power',
+            'Oil Pipeline': 'Oil & Gas, Midstream',
+            'Onshore wind': 'Renewable Energy, Wind (Onshore)',
+            'Petrochemical plants': 'Oil & Gas, Petrochemical',
+            'Police Facilities': 'Social Infrastructure, Justice',
+            'Ports': 'Transport, Port',
+            'Power Other': 'Conventional Energy',
+            'Prisons': 'Social Infrastructure, Justice',
+            'Rail': 'Transport, Heavy Rail',
+            'Refineries': 'Oil & Gas',
+            'Renewables Other': 'Renewable Energy',
+            'Roads': 'Transport, Road',
+            'Rolling Stock': 'Transport, Heavy Rail',
+            'Social Housing': 'Social Infrastructure, Social Housing',
+            'Social Infrastructure Other': 'Social Infrastructure',
+            'Solar CSP': 'Renewable Energy, Solar (Thermal)',
+            'Solar PV': 'Renewable Energy, Solar (Land-Based Solar)',
+            'Subsea Cable': 'Digital Infrastructure',
+            'Telecommunications Other': 'Digital Infrastructure',
+            'Tidal': 'Renewable Energy, Marine',
+            'Transport Other': 'Transport',
+            'Urban Rail Transit': 'Transport, Light Transport',
+            'Waste': 'Waste',
+            'Water': 'Water',
+            'Wireless Transmission': 'Digital Infrastructure'
+        }
+        sector_list = [sector.strip() for sector in sectors.split(',')]
+        replacement_list = []
+        for sector in sector_list:
+            if sector in replacements:
+                replacement_list.append(replacements[sector])
+            else:
+                replacement_list.append(sector)
+        return ', '.join(replacement_list)
+
+    # Ensure 'Helper_Any Level Sectors' exists
+    if 'Helper_Any Level Sectors' not in transaction_df.columns:
+        transaction_df['Helper_Any Level Sectors'] = ''
+
     # Map columns for the 'Transaction' sheet with transformations
+    transaction_df["Helper_Any Level Sectors"] = transaction_df["Helper_Any Level Sectors"].fillna('')
     return pd.DataFrame({
         "Transaction Upload ID": transaction_df["Transaction Upload ID"],
         "Transaction Name": transaction_df["Transaction Name"],
-        "Transaction Asset Class": "Infrastructure",  # Static value for all rows
-        "Transaction Status": transaction_df.get("Current Status", ""),  # Using .get to avoid KeyError if not present
+        "Asset Class": "Infrastructure",  # Static value for all rows
+        "Transaction Status": transaction_df.get("Current status", "").apply(replace_transaction_status),  # Using .get to avoid KeyError if not present
         "Finance Type": transaction_df.get("Finance Type", ""),
-        "Transaction Type": transaction_df.get("Type", ""),
+        "Transaction Type": transaction_df.get("Type", "").apply(replace_transaction_type),
         "Unknown Asset": "",
         "Underlying Asset Configuration": "",
         "Transaction Local Currency": transaction_df["Transaction Currency"].apply(extract_numerical_value),  # Extract numerical value
@@ -29,13 +348,13 @@ def process_transaction_sheet(transaction_df):
         "Transaction Equity (Local Currency)": "",
         "Debt/Equity Ratio": "",
         "Underlying Number of Assets": "",
-        "Region - Country": transaction_df.get("Geography", ""),
+        "Region - Country": transaction_df.get("Geography", "").apply(replace_region_country),
         "Region - State": "",
         "Region - City": "",
-        "Any Level Sectors": "",
+        "Any Level Sectors": transaction_df.get("Sector", "") + ", " + transaction_df.get("Sub-Sector", "").apply(populate_any_level_sectors),
         "PPP": transaction_df.get("PPP", ""),
         "Concession Period": transaction_df.get("Duration", ""),
-        "Contract": transaction_df.get("Delivery Model", ""),
+        "Contract": transaction_df.get("Delivery Model", "").apply(replace_contract),
         "SPV": transaction_df.get("SPV", ""),
         "Active": "TRUE",
         "Helper_Any Level Sectors": transaction_df.get("Sector", "") + ", " + transaction_df.get("Sub-Sector", "")
@@ -54,6 +373,26 @@ def process_events_sheet(transaction_df):
         ("Shortlisted proponents", "Shortlist")
     ]
     
+    # Define a function to replace specific words in the 'Event Type' column
+    def replace_event_type(eventtype):
+        replacements = {
+            'Binding Bids': '',
+            'Cancelled': 'Cancelled',
+            'Expressions of Interest': 'Expression of Interest',
+            'Financial Close': 'Financial Close',
+            'Indicative Bids': '',
+            'No Private Financing': '',
+            'On Hold': '',
+            'Preferred Proponent': 'Preferred Bidder',
+            'Pre-Launch': '',
+            'Pre-Qualified Proponents': '',
+            'RFP Returned': 'Request for Proposals',
+            'RFQ returned': 'Request for Qualifications',
+            'Shortlisted Proponents': 'Shortlist',
+            'Transaction Launch': 'Announced',
+        }
+        return replacements.get(eventtype, eventtype)
+    
     # Create an empty DataFrame to store event data
     events_df = pd.DataFrame(columns=["Transaction Upload ID", "Event Date", "Event Type", "Event Title"])
 
@@ -71,12 +410,18 @@ def process_events_sheet(transaction_df):
         temp_df = pd.DataFrame({
             "Transaction Upload ID": filtered_df["Transaction Upload ID"],
             "Event Date": pd.to_datetime(filtered_df[date_column]).dt.date,  # Convert to date only
-            "Event Type": event_type_series,
+            "Event Type": event_type_series.apply(replace_event_type),
             "Event Title": ""  # Assuming this field is empty or to be populated later
         })
 
         # Append the temporary DataFrame to the main events DataFrame
         events_df = pd.concat([events_df, temp_df], ignore_index=True)
+
+    # Remove rows with blank or "N/A" or "n/a" in 'Event Date'
+    events_df = events_df[~events_df["Event Date"].isin(["", "N/A", "n/a"])]
+
+    # Remove duplicate rows
+    events_df = events_df.drop_duplicates()
 
     return events_df
 
@@ -245,7 +590,7 @@ def populate_tranche_roles_any(transaction_df):
                             })
 
     return pd.DataFrame(entries, columns=[
-        "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type", "Company", "Fund", "Value", "Percentage", "Comment",	"Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+        "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type", "Company", "Fund", "Value", "Percentage", "Comment",    "Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
 
 # Autofit columns
 def autofit_columns(writer):
@@ -263,6 +608,17 @@ def autofit_columns(writer):
             adjusted_width = (max_length + 2)
             worksheet.column_dimensions[column].width = adjusted_width
 
+# Clean up transaction names
+def clean_transaction_name(df):
+    df['Transaction Name'] = df['Transaction Name'].str.strip()  # Remove leading/trailing spaces
+    df['Transaction Name'] = df['Transaction Name'].replace(r'\s+', ' ', regex=True)  # Replace multiple spaces with single space
+    return df
+
+# Replace " and " with " & "
+def replace_and_with_ampersand(df):
+    df['Transaction Name'] = df['Transaction Name'].str.replace(' and ', ' & ')
+    return df
+
 def create_destination_file(source_file):
     # Load the source Excel file and automatically select the first sheet
     xls = pd.ExcelFile(source_file)
@@ -271,6 +627,8 @@ def create_destination_file(source_file):
 
     # Process each required sheet
     transaction_mapped_df = process_transaction_sheet(transaction_df)
+    transaction_mapped_df = clean_transaction_name(transaction_mapped_df)  # Clean transaction names
+    transaction_mapped_df = replace_and_with_ampersand(transaction_mapped_df)  # Replace " and " with " & "
     events_df = process_events_sheet(transaction_df)
     bidders_any_df = process_bidders_any_sheet(transaction_df)  # Process the 'Bidders_Any' sheet
     tranches_df = process_tranches_sheet(transaction_df)  # Process the 'Tranches' sheet
@@ -307,7 +665,6 @@ def create_destination_file(source_file):
     
     return destination_file_name
 
-
 # Streamlit app
 st.title('Curating INFRA 3 Data Files')
 
@@ -319,6 +676,8 @@ if uploaded_file is not None:
     temp_file.write(uploaded_file.getbuffer())
     temp_file_path = temp_file.name
     temp_file.close()  # Ensure file is closed before processing
+
+    destination_path = None  # Initialize destination_path
 
     try:
         with st.spinner("Processing the file..."):
@@ -343,7 +702,7 @@ if uploaded_file is not None:
                 os.remove(temp_file_path)
         except PermissionError:
             st.warning("Temporary file could not be deleted immediately, please try again later.")
-        if os.path.exists(destination_path):
+        if destination_path and os.path.exists(destination_path):
             os.remove(destination_path)
 
 else:
