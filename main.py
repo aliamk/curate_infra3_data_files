@@ -7,12 +7,12 @@ from openpyxl.utils import get_column_letter
 import pytz
 from datetime import datetime
 
-def process_transaction_sheet(transaction_df):
-    # Define a function to extract numerical value from a string
-    def extract_numerical_value(text):
-        match = re.search(r'[\d,.]+', str(text))
-        return match.group() if match else ''
+# Define a function to extract numerical value from a string globally
+def extract_numerical_value(text):
+    match = re.search(r'[\d,.]+', str(text))
+    return match.group() if match else ''
 
+def process_transaction_sheet(transaction_df):
     # Define a function to replace specific words in the 'Transaction Status' column
     def replace_transaction_status(status):
         replacements = {
@@ -482,7 +482,6 @@ def process_bidders_any_sheet(transaction_df):
         "Transaction Upload ID", "Role Type", "Role Subtype", "Company", "Fund", 
         "Bidder Status", "Client Counterparty", "Client Company Name", "Fund Name"])
 
-
 def process_tranches_sheet(transaction_df):
     # Prepare a list to store all entries before converting to DataFrame
     entries = []
@@ -519,9 +518,6 @@ def process_tranches_sheet(transaction_df):
         "Maturity Start Date", "Maturity End Date", "Tenor", 
         "Tranche ESG Type", "Helper_Tranche Value USD m"])
     
-    # Remove rows where 'Tranche Tertiary Type' is empty or invalid
-    tranches_df = tranches_df[tranches_df["Tranche Tertiary Type"].astype(str).str.strip() != ""]
-
     return tranches_df
 
 def populate_additional_tranches(transaction_df, tranches_df):
@@ -551,15 +547,40 @@ def populate_additional_tranches(transaction_df, tranches_df):
                         "Helper_Tranche Value USD m": [volume_usd]
                     })
                     
-                    # Append the temporary DataFrame to the main tranches DataFrame
+                    # Append the temporary DataFrame to the main tranches_df DataFrame
                     tranches_df = pd.concat([tranches_df, temp_df], ignore_index=True)
-
-    # Remove rows where 'Helper_Tranche Value USD m' (Column K) is empty
-    tranches_df = tranches_df[tranches_df["Helper_Tranche Value USD m"].astype(str).str.strip() != ""]
     
+    # Append additional data based on 'Equity Providers at FC'
+    if 'Equity Providers at FC' in transaction_df.columns:
+        equity_providers_df = transaction_df.dropna(subset=['Equity Providers at FC'])
+        for _, row in equity_providers_df.iterrows():
+            transaction_upload_id = row["Transaction Upload ID"]
+            tranche_upload_id = f'{transaction_upload_id}-E'
+            equity_value = extract_numerical_value(row.get('Equity at FC USD(m)', ''))
+
+            temp_df = pd.DataFrame({
+                "Transaction Upload ID": [transaction_upload_id],
+                "Tranche Upload ID": [tranche_upload_id],
+                "Tranche Primary Type": [""],
+                "Tranche Secondary Type": [""],
+                "Tranche Tertiary Type": ["Equity"],
+                "Value": [""],
+                "Maturity Start Date": [""],
+                "Maturity End Date": [""],
+                "Tenor": [""],
+                "Tranche ESG Type": [""],
+                "Helper_Tranche Value USD m": [equity_value]
+            })
+            
+            tranches_df = pd.concat([tranches_df, temp_df], ignore_index=True)
+    
+    # Remove rows where 'Tranche Tertiary Type' is empty and 'Tranche Upload ID' includes "-L1" to "-L20"
+    tranches_df = tranches_df[~((tranches_df['Tranche Tertiary Type'].astype(str).str.strip() == '') & 
+                                (tranches_df['Tranche Upload ID'].str.contains('-L[1-9]$|-L1[0-9]$|-L20$', regex=True)))]
+
     return tranches_df
 
-def populate_tranche_roles_any(transaction_df):
+def populate_tranche_roles_any(transaction_df, tranche_roles_any_df):
     entries = []
 
     # Process 'Tranche 1 Lenders' to 'Tranche 20 Lenders' first
@@ -610,8 +631,39 @@ def populate_tranche_roles_any(transaction_df):
                                 "Company": underwriter
                             })
 
-    return pd.DataFrame(entries, columns=[
-        "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type", "Company", "Fund", "Value", "Percentage", "Comment",    "Helper_Tranche Primary Type", "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+    # Append additional data based on 'Equity Providers at FC'
+    if 'Equity Providers at FC' in transaction_df.columns:
+        equity_providers_df = transaction_df.dropna(subset=['Equity Providers at FC'])
+        for _, row in equity_providers_df.iterrows():
+            equity_providers = row['Equity Providers at FC'].split(',')
+            for provider in equity_providers:
+                provider = provider.strip()
+                if provider:
+                    entries.append({
+                        "Transaction Upload ID": row["Transaction Upload ID"],
+                        "Tranche Upload ID": f'{row["Transaction Upload ID"]}-E',
+                        "Company": provider,
+                        "Role Type": "", 
+                        "Role Subtype": "",
+                        "Fund": "",
+                        "Value": "",
+                        "Percentage": "",
+                        "Comment": "",
+                        "Helper_Tranche Primary Type": "",
+                        "Helper_Tranche Value $": "",
+                        "Helper_Transaction Value (USD m)": "",
+                        "Helper_LT Accredited Value ($m)": "",
+                        "Helper_Sponsor Equity USD m": ""
+                    })
+
+    # Create DataFrame from list of dictionaries
+    new_entries_df = pd.DataFrame(entries, columns=[
+        "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
+        "Value", "Percentage", "Comment", "Helper_Tranche Primary Type", 
+        "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", 
+        "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+
+    return pd.concat([tranche_roles_any_df, new_entries_df], ignore_index=True)
 
 # Autofit columns
 def autofit_columns(writer):
@@ -666,7 +718,12 @@ def create_destination_file(source_file):
     destination_file_name = f'curated_INFRA3_{formatted_time}.xlsx'
     
     # Populate tranche roles
-    tranche_roles_any_df = populate_tranche_roles_any(transaction_df)
+    tranche_roles_any_df = pd.DataFrame(columns=[
+        "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
+        "Value", "Percentage", "Comment", "Helper_Tranche Primary Type", 
+        "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", 
+        "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+    tranche_roles_any_df = populate_tranche_roles_any(transaction_df, tranche_roles_any_df)
     
     # Save to new Excel file
     with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
