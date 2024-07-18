@@ -709,6 +709,18 @@ def create_destination_file(source_file):
     # Populate additional tranches
     tranches_df = populate_additional_tranches(transaction_df, tranches_df)
     
+    # Update 'Tranche Primary Type', 'Tranche Secondary Type' and 'Tranche Tertiary Type' based on 'Tranche Upload ID'
+    tranches_df['Tranche Primary Type'] = tranches_df['Tranche Upload ID'].apply(
+        lambda x: 'Debt' if any(x.endswith(suffix) for suffix in ['L1', 'L2', 'L3', 'CM1', 'CM2', 'CM3']) else 'Equity'
+    )
+    tranches_df['Tranche Secondary Type'] = tranches_df['Tranche Upload ID'].apply(
+        lambda x: 'Loan' if any(x.endswith(suffix) for suffix in ['L1', 'L2', 'L3']) else ('Bond' if any(x.endswith(suffix) for suffix in ['CM1', 'CM2', 'CM3']) else 'Equity')
+    )
+    tranches_df['Tranche Tertiary Type'] = tranches_df.apply(
+        lambda row: 'Commercial Bond' if any(row['Tranche Upload ID'].endswith(suffix) for suffix in ['CM1', 'CM2', 'CM3']) else row['Tranche Tertiary Type'],
+        axis=1
+    )    
+
     # Get the current date and time in London timezone
     london_tz = pytz.timezone('Europe/London')
     current_time = datetime.now(london_tz)
