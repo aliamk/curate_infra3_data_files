@@ -703,9 +703,7 @@ def populate_tranche_roles_any(transaction_df, tranche_roles_any_df):
     # Create DataFrame from list of dictionaries
     new_entries_df = pd.DataFrame(entries, columns=[
         "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
-        "Value", "Percentage", "Comment", "Helper_Tranche Primary Type", 
-        "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", 
-        "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+        "Value", "Percentage", "Comment"])
 
     return pd.concat([tranche_roles_any_df, new_entries_df], ignore_index=True)
 
@@ -776,9 +774,7 @@ def create_destination_file(source_file):
     # Populate tranche roles
     tranche_roles_any_df = pd.DataFrame(columns=[
         "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
-        "Value", "Percentage", "Comment", "Helper_Tranche Primary Type", 
-        "Helper_Tranche Value $", "Helper_Transaction Value (USD m)", 
-        "Helper_LT Accredited Value ($m)", "Helper_Sponsor Equity USD m"])
+        "Value", "Percentage", "Comment"])
     tranche_roles_any_df = populate_tranche_roles_any(transaction_df, tranche_roles_any_df)
     
     # Save to new Excel file
