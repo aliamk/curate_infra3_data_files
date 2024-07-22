@@ -338,7 +338,7 @@ def process_transaction_sheet(transaction_df):
         "Transaction Name": transaction_df["Transaction Name"],
         "Transaction Asset Class": "Infrastructure",  # Static value for all rows
         "Transaction Status": transaction_df.get("Current status", "").apply(replace_transaction_status),  # Using .get to avoid KeyError if not present
-        "Finance Type": transaction_df.get("Finance Type", ""),
+        "": "",  # This creates an empty column with no header or data
         "Transaction Type": transaction_df.get("Type", "").apply(replace_transaction_type),
         "Unknown Asset": "",
         "Underlying Asset Configuration": "",
@@ -507,8 +507,10 @@ def process_tranches_sheet(transaction_df):
                         "Maturity Start Date": "",  
                         "Maturity End Date": "",  
                         "Tenor": row.get(tranche_tenor_column, ""),
-                        "Tranche ESG Type": "",  
-                        "Helper_Tranche Value USD m": row.get(tranche_value_column, "")
+                        "Tranche ESG Type": row.get("Tranche ESG Type", ""),  
+                        "Helper_Tranche Value USD m": row.get(tranche_value_column, ""),
+                        "Helper_Transaction Value USD m": row.get("Transaction size USD(m)", ""),
+                        "Helper_Transaction Value LC": row.get("Transaction size (m)", "")
                     })
 
     # Create DataFrame from list of dictionaries
@@ -516,7 +518,50 @@ def process_tranches_sheet(transaction_df):
         "Transaction Upload ID", "Tranche Upload ID", "Tranche Primary Type", 
         "Tranche Secondary Type", "Tranche Tertiary Type", "Value", 
         "Maturity Start Date", "Maturity End Date", "Tenor", 
-        "Tranche ESG Type", "Helper_Tranche Value USD m"])
+        "Tranche ESG Type", "Helper_Tranche Value USD m",
+        "Helper_Transaction Value USD m", "Helper_Transaction Value LC"])
+    
+    # Helper function to safely convert values to float
+    def safe_float_conversion(value):
+        if isinstance(value, str):
+            value = value.replace(',', '').strip()
+        try:
+            return float(value)
+        except ValueError:
+            return 0
+
+    # Add the new column 'Helper_Tranche Value USD m as % of Helper_Transaction Value USD m'
+    tranches_df["Helper_Tranche Value USD m as % of Helper_Transaction Value USD m"] = tranches_df.apply(
+    lambda row: safe_float_conversion(row["Helper_Tranche Value USD m"]) / safe_float_conversion(row["Helper_Transaction Value USD m"]) 
+    if safe_float_conversion(row["Helper_Transaction Value USD m"]) != 0 else 0, axis=1)
+
+    # Populate column F "Value" with results of multiplying columns "Helper_Tranche Value USD m as % of Helper_Transaction Value USD m" by "Helper_Transaction Value LC"
+    tranches_df["Value"] = tranches_df.apply(
+    lambda row: safe_float_conversion(row["Helper_Tranche Value USD m as % of Helper_Transaction Value USD m"]) * safe_float_conversion(row["Helper_Transaction Value LC"]) 
+    if safe_float_conversion(row["Helper_Tranche Value USD m as % of Helper_Transaction Value USD m"]) and safe_float_conversion(row["Helper_Transaction Value LC"]) else 0, axis=1)
+    
+    # Update 'Tranche ESG Type' if 'Tranche Tertiary Type' contains 'Islamic'
+    tranches_df["Tranche ESG Type"] = tranches_df.apply(
+        lambda row: f'{row["Tranche ESG Type"]}, Tranche ESG Type' if "Islamic" in row["Tranche Tertiary Type"] else row["Tranche ESG Type"],
+        axis=1
+    )
+
+    # Replace words in 'Tranche Tertiary Type' based on the provided list
+    replacements = {
+        'Capex Facility': '',
+        'Change-in-Law Facility': '',
+        'Equity Bridge Loan': '',
+        'Export Credit': 'Export Credit Facility',
+        'Government Grant': '',
+        'Government Loan': 'State Loan',
+        'Islamic Financing': 'Term Loan',
+        'Multilateral': 'Multilateral Loan',
+        'Other': '',
+        'Standby/Contigency Facility': 'Standby Facility'
+    }
+
+    tranches_df["Tranche Tertiary Type"] = tranches_df["Tranche Tertiary Type"].replace(replacements)
+
     
     return tranches_df
 
@@ -544,7 +589,9 @@ def populate_additional_tranches(transaction_df, tranches_df):
                         "Maturity End Date": [""],  
                         "Tenor": [""],  
                         "Tranche ESG Type": [""],  
-                        "Helper_Tranche Value USD m": [volume_usd]
+                        "Helper_Tranche Value USD m": [volume_usd],
+                        "Helper_Transaction Value USD m": [row.get("Transaction size USD(m)", "")],
+                        "Helper_Transaction Value LC": [row.get("Transaction size (m)", "")]
                     })
                     
                     # Append the temporary DataFrame to the main tranches_df DataFrame
@@ -569,7 +616,9 @@ def populate_additional_tranches(transaction_df, tranches_df):
                 "Maturity End Date": [""],
                 "Tenor": [""],
                 "Tranche ESG Type": [""],
-                "Helper_Tranche Value USD m": [equity_value]
+                "Helper_Tranche Value USD m": [equity_value],
+                "Helper_Transaction Value USD m": [row.get("Transaction size USD(m)", "")],
+                "Helper_Transaction Value LC": [row.get("Transaction size (m)", "")]
             })
             
             tranches_df = pd.concat([tranches_df, temp_df], ignore_index=True)
@@ -648,12 +697,7 @@ def populate_tranche_roles_any(transaction_df, tranche_roles_any_df):
                         "Fund": "",
                         "Value": "",
                         "Percentage": "",
-                        "Comment": "",
-                        "Helper_Tranche Primary Type": "",
-                        "Helper_Tranche Value $": "",
-                        "Helper_Transaction Value (USD m)": "",
-                        "Helper_LT Accredited Value ($m)": "",
-                        "Helper_Sponsor Equity USD m": ""
+                        "Comment": ""
                     })
 
     # Create DataFrame from list of dictionaries
@@ -740,8 +784,8 @@ def create_destination_file(source_file):
     # Save to new Excel file
     with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
         transaction_mapped_df.to_excel(writer, sheet_name='Transaction', index=False)
-        underlying_asset_df = pd.DataFrame(columns=["Transaction Upload ID", "Asset Upload ID"])
-        underlying_asset_df.to_excel(writer, sheet_name='Underlying_Asset', index=False)
+        # underlying_asset_df = pd.DataFrame(columns=["Transaction Upload ID", "Asset Upload ID"])
+        # underlying_asset_df.to_excel(writer, sheet_name='Underlying_Asset', index=False)
         events_df.to_excel(writer, sheet_name='Events', index=False)
         bidders_any_df.to_excel(writer, sheet_name='Bidders_Any', index=False)
         tranches_df.to_excel(writer, sheet_name='Tranches', index=False)
