@@ -338,7 +338,7 @@ def process_transaction_sheet(transaction_df):
         "Transaction Name": transaction_df["Transaction Name"],
         "Transaction Asset Class": "Infrastructure",  # Static value for all rows
         "Transaction Status": transaction_df.get("Current status", "").apply(replace_transaction_status),  # Using .get to avoid KeyError if not present
-        "": "",  # This creates an empty column with no header or data
+        "Finance Type": "",
         "Transaction Type": transaction_df.get("Type", "").apply(replace_transaction_type),
         "Unknown Asset": "",
         "Underlying Asset Configuration": "",
@@ -639,14 +639,23 @@ def populate_tranche_roles_any(transaction_df, tranche_roles_any_df):
         if lenders_column in transaction_df.columns:
             for _, row in transaction_df.iterrows():
                 if pd.notna(row[lenders_column]):
-                    lenders = row[lenders_column].split(',')
+                    lenders = re.split(r',\s*(?![^()]*\))', row[lenders_column])  # Split by comma unless within parentheses
                     for lender in lenders:
                         lender = lender.strip()
+                        percentage = ''
+                        match = re.search(r'(\d+)%\)', lender)
+                        if match:
+                            percentage = match.group(1)
                         if lender:
                             entries.append({
                                 "Transaction Upload ID": row["Transaction Upload ID"],
                                 "Tranche Upload ID": f'{row["Transaction Upload ID"]}-L{i}',
-                                "Company": lender
+                                "Tranche Role Type": "",
+                                "Company": lender,
+                                "Fund": "",
+                                "Value": "",
+                                "Percentage": percentage,
+                                "Comment": ""
                             })
 
     # Process 'Capital Market Debt 1 Underwriters' to 'Capital Market Debt 20 Underwriters' next
@@ -657,55 +666,90 @@ def populate_tranche_roles_any(transaction_df, tranche_roles_any_df):
         if cm1_column in transaction_df.columns:
             for _, row in transaction_df.iterrows():
                 if pd.notna(row[cm1_column]):
-                    underwriters_cm1 = row[cm1_column].split(',')
+                    underwriters_cm1 = re.split(r',\s*(?![^()]*\))', row[cm1_column])  # Split by comma unless within parentheses
                     for underwriter in underwriters_cm1:
                         underwriter = underwriter.strip()
+                        percentage = ''
+                        match = re.search(r'(\d+)%\)', underwriter)
+                        if match:
+                            percentage = match.group(1)
                         if underwriter:
                             entries.append({
                                 "Transaction Upload ID": row["Transaction Upload ID"],
                                 "Tranche Upload ID": f'{row["Transaction Upload ID"]}-CM{i}',
-                                "Company": underwriter
+                                "Tranche Role Type": "",
+                                "Company": underwriter,
+                                "Fund": "",
+                                "Value": "",
+                                "Percentage": percentage,
+                                "Comment": ""
                             })
 
         if cm2_column in transaction_df.columns:
             for _, row in transaction_df.iterrows():
                 if pd.notna(row[cm2_column]):
-                    underwriters_cm2 = row[cm2_column].split(',')
+                    underwriters_cm2 = re.split(r',\s*(?![^()]*\))', row[cm2_column])  # Split by comma unless within parentheses
                     for underwriter in underwriters_cm2:
                         underwriter = underwriter.strip()
+                        percentage = ''
+                        match = re.search(r'(\d+)%\)', underwriter)
+                        if match:
+                            percentage = match.group(1)
                         if underwriter:
                             entries.append({
                                 "Transaction Upload ID": row["Transaction Upload ID"],
                                 "Tranche Upload ID": f'{row["Transaction Upload ID"]}-CM2{i}',
-                                "Company": underwriter
+                                "Tranche Role Type": "",
+                                "Company": underwriter,
+                                "Fund": "",
+                                "Value": "",
+                                "Percentage": percentage,
+                                "Comment": ""
                             })
 
     # Append additional data based on 'Equity Providers at FC'
     if 'Equity Providers at FC' in transaction_df.columns:
         equity_providers_df = transaction_df.dropna(subset=['Equity Providers at FC'])
         for _, row in equity_providers_df.iterrows():
-            equity_providers = row['Equity Providers at FC'].split(',')
+            equity_providers = re.split(r',\s*(?![^()]*\))', row['Equity Providers at FC'])  # Split by comma unless within parentheses
             for provider in equity_providers:
                 provider = provider.strip()
+                percentage = ''
+                match = re.search(r'(\d+)%\)', provider)
+                if match:
+                    percentage = match.group(1)
                 if provider:
                     entries.append({
                         "Transaction Upload ID": row["Transaction Upload ID"],
                         "Tranche Upload ID": f'{row["Transaction Upload ID"]}-E',
+                        "Tranche Role Type": "",
                         "Company": provider,
-                        "Role Type": "", 
-                        "Role Subtype": "",
                         "Fund": "",
                         "Value": "",
-                        "Percentage": "",
+                        "Percentage": percentage,
                         "Comment": ""
                     })
 
     # Create DataFrame from list of dictionaries
-    new_entries_df = pd.DataFrame(entries, columns=[
-        "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
-        "Value", "Percentage", "Comment"])
+    tranche_roles_any_df = pd.DataFrame(entries, columns=[
+        "Transaction Upload ID", "Tranche Upload ID", "Tranche Role Type", "Company", "Fund", 
+        "Value", "Percentage", "Comment"
+    ])
 
-    return pd.concat([tranche_roles_any_df, new_entries_df], ignore_index=True)
+    return tranche_roles_any_df
+
+def clean_company_names(tranche_roles_any_df):
+    def clean_company_name(name):
+        # a) Delete content within parenthesis and delete parenthesis
+        name = re.sub(r'\s*\(.*?\)\s*', '', name)
+        # b) Delete all trailing spaces
+        name = name.strip()
+        # c) Delete two or more spaces in between words
+        name = re.sub(r'\s{2,}', ' ', name)
+        return name
+    
+    tranche_roles_any_df['Company'] = tranche_roles_any_df['Company'].apply(clean_company_name)
+    return tranche_roles_any_df
 
 # Autofit columns
 def autofit_columns(writer):
@@ -776,6 +820,24 @@ def create_destination_file(source_file):
         "Transaction Upload ID", "Tranche Upload ID", "Role Type", "Company", "Fund", 
         "Value", "Percentage", "Comment"])
     tranche_roles_any_df = populate_tranche_roles_any(transaction_df, tranche_roles_any_df)
+
+    # New logic to update 'Tranche Role Type' based on conditions
+    for i, row in tranche_roles_any_df.iterrows():
+        tranche_upload_id = row['Tranche Upload ID']
+        tranche_info = tranches_df[tranches_df['Tranche Upload ID'] == tranche_upload_id]
+        if not tranche_info.empty:
+            if tranche_info.iloc[0]['Tranche Primary Type'] == 'Equity':
+                tranche_roles_any_df.at[i, 'Tranche Role Type'] = 'Sponsor'
+            elif tranche_info.iloc[0]['Tranche Secondary Type'] == 'Bond':
+                tranche_roles_any_df.at[i, 'Tranche Role Type'] = 'Bond Arranger'
+            elif tranche_info.iloc[0]['Tranche Secondary Type'] == 'Loan':
+                tranche_roles_any_df.at[i, 'Tranche Role Type'] = 'Debt Provider'
+            elif (tranche_info.iloc[0]['Tranche Primary Type'] == 'Debt' and 
+                  tranche_info.iloc[0]['Tranche Secondary Type'] == 'Non-Commercial Instrument'):
+                tranche_roles_any_df.at[i, 'Tranche Role Type'] = 'Debt Provider'
+
+    # Clean the 'Company' column in the 'Tranche_Roles_Any' tab
+    tranche_roles_any_df = clean_company_names(tranche_roles_any_df)
     
     # Save to new Excel file
     with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
