@@ -842,8 +842,8 @@ def create_destination_file(source_file):
     # Save to new Excel file
     with pd.ExcelWriter(destination_file_name, engine='openpyxl') as writer:
         transaction_mapped_df.to_excel(writer, sheet_name='Transaction', index=False)
-        # underlying_asset_df = pd.DataFrame(columns=["Transaction Upload ID", "Asset Upload ID"])
-        # underlying_asset_df.to_excel(writer, sheet_name='Underlying_Asset', index=False)
+        underlying_asset_df = pd.DataFrame(columns=["Transaction Upload ID", "Asset Upload ID"])
+        underlying_asset_df.to_excel(writer, sheet_name='Underlying_Asset', index=False)
         events_df.to_excel(writer, sheet_name='Events', index=False)
         bidders_any_df.to_excel(writer, sheet_name='Bidders_Any', index=False)
         tranches_df.to_excel(writer, sheet_name='Tranches', index=False)
