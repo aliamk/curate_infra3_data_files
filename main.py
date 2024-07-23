@@ -427,9 +427,9 @@ def process_events_sheet(transaction_df):
 
 def process_bidders_any_sheet(transaction_df):
     sources = {
-        "Legal Advisors": "Adviser",
-        "Technical Advisors": "Adviser",
-        "Financial Advisors": "Adviser",
+        "Legal Advisors": "Legal Adviser",
+        "Technical Advisors": "Technical Adviser",
+        "Financial Advisors": "Financial Adviser",
         "Vendors": "Divestor",
         "Grantors": "Awarding Authority"
     }
