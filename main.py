@@ -433,15 +433,26 @@ def process_bidders_any_sheet(transaction_df):
         "Vendors": "Divestor",
         "Grantors": "Awarding Authority"
     }
+    return process_transaction_data(transaction_df, sources)
 
+def process_transaction_data(transaction_df, sources):
     # Prepare a list to store all entries before converting to DataFrame
     entries = []
 
     # Process each source column
     for source_column, role_type in sources.items():
         for _, row in transaction_df.iterrows():
-            if pd.notna(row[source_column]):
-                companies = row[source_column].split(';')  # Split by semi-colon
+            cell_value = row[source_column]
+            if pd.notna(cell_value):
+                cell_value = str(cell_value)  # Ensure the value is a string before splitting
+
+                # Determine the delimiter based on the column name
+                if source_column in ["Vendors", "Grantors"]:
+                    delimiter = ','
+                else:
+                    delimiter = ';'
+                
+                companies = cell_value.split(delimiter)  # Split by the determined delimiter
                 for company in companies:
                     company = company.strip()
                     if company:  # Ensure company is not empty
@@ -477,7 +488,7 @@ def process_bidders_any_sheet(transaction_df):
                             "Fund Name": ""
                         })
 
-    # Create DataFrame from list of dictionaries
+    # Create DataFrame from list of dictionaries and return it
     return pd.DataFrame(entries, columns=[
         "Transaction Upload ID", "Role Type", "Role Subtype", "Company", "Fund", 
         "Bidder Status", "Client Counterparty", "Client Company Name", "Fund Name"])
@@ -856,6 +867,7 @@ def create_destination_file(source_file):
         autofit_columns(writer)
     
     return destination_file_name
+
 
 # Streamlit app
 st.title('Curating INFRA 3 Data Files')
